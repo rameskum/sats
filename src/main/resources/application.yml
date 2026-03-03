@@ -1,0 +1,82 @@
+# ═══════════════════════════════════════════════════════════
+# Schema-Aware Transformation Service — Default Configuration
+# ═══════════════════════════════════════════════════════════
+
+sats:
+  schema:
+    cache-ttl: 5m
+    registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+    rescue-threshold-percent: 50
+
+  batch:
+    default-profile: near-real-time
+    byte-target: 128MB
+    max-records: 50000
+    max-timer: 60s
+    high-water-mark-multiplier: 2.0
+    timer-check-interval-ms: 5000
+
+  threading:
+    write-pool-size: 8
+    write-queue-capacity: 16
+    carrier-pool-size: 0          # 0 = auto (availableProcessors)
+    pin-alert-threshold: 100ms
+
+  writer:
+    target-type: delta
+    merge-schema: true
+
+  compaction:
+    enabled: true
+    interval: 4h
+    target-file-size: 1GB
+
+  retry:
+    max-attempts: 5
+    initial-backoff: 1s
+    backoff-multiplier: 2.0
+
+  dlq:
+    topic: ${DLQ_TOPIC:sats-dlq}
+
+  spark:
+    token-refresh-percent: 80
+
+  consumer:
+    topic-registry-url: ${TOPIC_REGISTRY_URL:http://localhost:8080/api/topics}
+    group-id: sats-consumer-group
+    # Topic groups control how topics are distributed across listener containers.
+    # Topics in the same group share one poll loop and one set of consumer threads.
+    # Topics in different groups run fully independently — no starvation between groups.
+    # concurrency: number of KafkaConsumer threads per group.
+    #   Effective parallelism = min(concurrency, partition_count).
+    #   Keep concurrency <= partition count to avoid idle consumers.
+    # Topics returned by the registry but absent from all groups → default container (concurrency=1).
+    topic-groups:
+      - topics: [ orders, payments ]   # similar volume — share a poll loop
+        concurrency: 2
+      - topics: [ audit-log ]          # low volume — isolated so it is never starved
+        concurrency: 1
+      - topics: [ clickstream ]        # high volume — isolated + scaled out
+        concurrency: 4
+
+# ─── Spring Kafka defaults ────────────────────────────────
+spring:
+  application:
+    name: sats
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 500
+
+# ─── Actuator & Metrics ──────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: sats
