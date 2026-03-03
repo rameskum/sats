@@ -1,4 +1,4 @@
-package com.tds.tdvip.pde.vpda.sats;
+package com.sats;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
