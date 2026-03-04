@@ -20,7 +20,6 @@ sats:
     carrier-pool-size: 0          # 0 = auto (availableProcessors)
 
   writer:
-    target-type: delta
     merge-schema: true
 
   retry:

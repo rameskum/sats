@@ -1,6 +1,5 @@
 package com.sats.config;
 
-import com.sats.domain.enums.TargetType;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -35,7 +34,6 @@ public record SatsProperties(
     ) {}
 
     public record WriterConfig(
-            TargetType targetType,
             boolean mergeSchema
     ) {}
 

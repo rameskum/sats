@@ -1,8 +1,10 @@
 package com.sats.batch;
 
 import com.sats.config.BatchProperties;
-import com.sats.domain.model.BatchPayload;
+import com.sats.domain.enums.TargetType;
+import com.sats.domain.model.SchemaDefinition;
 import com.sats.domain.model.TransformedRecord;
+import com.sats.registry.SchemaRegistryClient;
 import com.sats.threading.WritePoolExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,10 +17,9 @@ import java.util.concurrent.ConcurrentMap;
  * Manages per-dataset {@link BatchAccumulator} instances (Section 8.2).
  * A scheduled timer periodically checks all accumulators for time-based flushes.
  * <p>
- * When an accumulator crosses a flush threshold (record count, byte size, or
- * time window), the resulting {@link BatchPayload} is handed directly to
- * {@link WritePoolExecutor#submit(BatchPayload)}, which queues it on the
- * bounded platform-thread write pool.
+ * The target write format is resolved per-dataset from the schema registry when
+ * an accumulator is first created.  Falls back to {@link TargetType#DELTA} if
+ * the registry is unavailable or returns no schema for the dataset.
  */
 @Component
 @Slf4j
@@ -26,12 +27,15 @@ public class PerDatasetBatchManager {
 
     private final BatchProperties batchProperties;
     private final WritePoolExecutor writePoolExecutor;
+    private final SchemaRegistryClient schemaRegistryClient;
     private final ConcurrentMap<String, BatchAccumulator> accumulators = new ConcurrentHashMap<>();
 
     public PerDatasetBatchManager(BatchProperties batchProperties,
-                                  WritePoolExecutor writePoolExecutor) {
+                                  WritePoolExecutor writePoolExecutor,
+                                  SchemaRegistryClient schemaRegistryClient) {
         this.batchProperties = batchProperties;
         this.writePoolExecutor = writePoolExecutor;
+        this.schemaRegistryClient = schemaRegistryClient;
     }
 
     public void accumulate(String datasetId, TransformedRecord record, long estimatedBytes) {
@@ -53,12 +57,20 @@ public class PerDatasetBatchManager {
     }
 
     private BatchAccumulator createAccumulator(String datasetId) {
-        log.info("Creating batch accumulator for dataset {}", datasetId);
+        var targetFormat = schemaRegistryClient.getSchema(datasetId)
+                .map(SchemaDefinition::targetFormat)
+                .orElseGet(() -> {
+                    log.warn("No schema found for dataset '{}'; defaulting to DELTA format", datasetId);
+                    return TargetType.DELTA;
+                });
+
+        log.info("Creating batch accumulator for dataset {} (targetFormat={})", datasetId, targetFormat);
         return new BatchAccumulator(
                 datasetId,
                 batchProperties.maxRecords(),
                 parseBytes(batchProperties.byteTarget()),
-                batchProperties.maxTimer()
+                batchProperties.maxTimer(),
+                targetFormat
         );
     }
 

@@ -1,5 +1,6 @@
 package com.sats.batch;
 
+import com.sats.domain.enums.TargetType;
 import com.sats.domain.model.BatchPayload;
 import com.sats.domain.model.TransformedRecord;
 import lombok.extern.slf4j.Slf4j;
@@ -23,17 +24,20 @@ public class BatchAccumulator {
     private final int maxRecords;
     private final long maxBytes;
     private final Duration maxTimer;
+    private final TargetType targetFormat;
 
     private final ReentrantLock lock = new ReentrantLock();
     private List<TransformedRecord> buffer;
     private long currentBytes;
     private Instant windowStart;
 
-    public BatchAccumulator(String datasetId, int maxRecords, long maxBytes, Duration maxTimer) {
+    public BatchAccumulator(String datasetId, int maxRecords, long maxBytes, Duration maxTimer,
+                            TargetType targetFormat) {
         this.datasetId = datasetId;
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.maxTimer = maxTimer;
+        this.targetFormat = targetFormat;
         this.buffer = new ArrayList<>();
         this.currentBytes = 0;
         this.windowStart = Instant.now();
@@ -91,7 +95,8 @@ public class BatchAccumulator {
                 datasetId,
                 List.copyOf(flushed),
                 flushedBytes,
-                UUID.randomUUID().toString()
+                UUID.randomUUID().toString(),
+                targetFormat
         );
     }
 

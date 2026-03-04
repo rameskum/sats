@@ -3,6 +3,7 @@ package com.sats.registry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sats.config.SatsProperties;
 import com.sats.domain.enums.DataType;
+import com.sats.domain.enums.TargetType;
 import com.sats.domain.model.FieldSpec;
 import com.sats.domain.model.SchemaDefinition;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
  * <pre>
  * {
  *   "datasetId": "orders",
+ *   "targetFormat": "DELTA",
  *   "fields": [
  *     { "fieldName": "orderId",    "targetType": "STRING",    "nullable": false },
  *     { "fieldName": "amount",     "targetType": "DOUBLE",    "nullable": true  },
@@ -104,9 +106,11 @@ public class SchemaRegistryClient {
                             )
                     ));
 
-            var definition = new SchemaDefinition(datasetId, fields, Instant.now());
+            var targetFormat = dto.targetFormat() != null ? dto.targetFormat() : TargetType.DELTA;
+            var definition = new SchemaDefinition(datasetId, fields, targetFormat, Instant.now());
             cache.put(datasetId, definition);
-            log.info("Schema cached for dataset '{}': {} field(s)", datasetId, fields.size());
+            log.info("Schema cached for dataset '{}': {} field(s), targetFormat={}",
+                    datasetId, fields.size(), targetFormat);
             return Optional.of(definition);
 
         } catch (Exception e) {
@@ -129,7 +133,11 @@ public class SchemaRegistryClient {
 
     // ── Registry response DTOs ────────────────────────────────────────
 
-    private record SchemaRegistryResponse(String datasetId, List<FieldDto> fields) {}
+    private record SchemaRegistryResponse(
+            String datasetId,
+            List<FieldDto> fields,
+            TargetType targetFormat
+    ) {}
 
     private record FieldDto(
             String fieldName,

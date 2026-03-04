@@ -1,6 +1,5 @@
 package com.sats.writer;
 
-import com.sats.config.SatsProperties;
 import com.sats.domain.model.BatchPayload;
 import com.sats.domain.strategy.WriteStrategy;
 import lombok.RequiredArgsConstructor;
@@ -11,25 +10,25 @@ import java.util.List;
 
 /**
  * Factory/resolver for {@link WriteStrategy} implementations.
- * Selects the strategy matching the configured target type and delegates the write.
+ * Selects the strategy matching the dataset's {@code targetFormat} (resolved
+ * per-dataset from the schema registry) and delegates the write.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class WriteProvider {
 
-    private final SatsProperties satsProperties;
     private final List<WriteStrategy> strategies;
 
     public void write(BatchPayload payload) {
-        var targetType = satsProperties.writer().targetType();
+        var targetFormat = payload.targetFormat();
 
         strategies.stream()
-                .filter(s -> s.supports() == targetType)
+                .filter(s -> s.supports() == targetFormat)
                 .findFirst()
                 .ifPresentOrElse(
                         strategy -> strategy.write(payload),
-                        () -> log.error("No WriteStrategy registered for target type: {}", targetType)
+                        () -> log.error("No WriteStrategy registered for target format: {}", targetFormat)
                 );
     }
 }
