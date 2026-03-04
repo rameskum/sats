@@ -22,7 +22,6 @@ public record SatsProperties(
         BatchProperties batch,
         ThreadingProperties threading,
         WriterConfig writer,
-        CompactionConfig compaction,
         RetryProperties retry,
         DlqConfig dlq,
         SparkConfig spark,
@@ -38,12 +37,6 @@ public record SatsProperties(
     public record WriterConfig(
             TargetType targetType,
             boolean mergeSchema
-    ) {}
-
-    public record CompactionConfig(
-            boolean enabled,
-            Duration interval,
-            String targetFileSize
     ) {}
 
     public record DlqConfig(

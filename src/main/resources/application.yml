@@ -9,27 +9,19 @@ sats:
     rescue-threshold-percent: 50
 
   batch:
-    default-profile: near-real-time
     byte-target: 128MB
     max-records: 50000
     max-timer: 60s
-    high-water-mark-multiplier: 2.0
     timer-check-interval-ms: 5000
 
   threading:
     write-pool-size: 8
     write-queue-capacity: 16
     carrier-pool-size: 0          # 0 = auto (availableProcessors)
-    pin-alert-threshold: 100ms
 
   writer:
     target-type: delta
     merge-schema: true
-
-  compaction:
-    enabled: true
-    interval: 4h
-    target-file-size: 1GB
 
   retry:
     max-attempts: 5
@@ -68,6 +60,9 @@ sats:
 spring:
   application:
     name: sats
+  threads:
+    virtual:
+      enabled: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:

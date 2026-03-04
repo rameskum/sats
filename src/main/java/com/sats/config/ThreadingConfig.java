@@ -7,20 +7,15 @@ import org.springframework.context.annotation.Configuration;
 
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Wires the two executor tiers described in Section 9 of the design document:
- * <ul>
- *   <li><b>virtualExecutor</b> — unbounded virtual-thread pool for polling,
- *       deserialization, and transformation (I/O-bound, no {@code synchronized}).</li>
- *   <li><b>writePoolExecutor</b> — bounded platform-thread pool for Spark writes
- *       (avoids virtual-thread carrier pinning inside Spark's synchronized blocks).</li>
- * </ul>
+ * Wires the executor infrastructure described in Section 9 of the design document.
+ * Virtual threads are enabled globally via {@code spring.threads.virtual.enabled=true}.
+ * Spark writes use a separate bounded platform-thread pool to avoid virtual-thread
+ * carrier pinning inside Spark's {@code synchronized} blocks.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -28,12 +23,6 @@ import java.util.concurrent.TimeUnit;
 public class ThreadingConfig {
 
     private final ThreadingProperties threadingProps;
-
-    @Bean
-    public ExecutorService virtualExecutor() {
-        log.info("Creating virtual-thread executor (carrier pool size: {})", threadingProps.carrierPoolSize());
-        return Executors.newVirtualThreadPerTaskExecutor();
-    }
 
     @Bean
     public ThreadPoolExecutor writePoolExecutor() {
