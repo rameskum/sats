@@ -51,8 +51,19 @@ public record SatsProperties(
     ) {}
 
     public record SparkConfig(
-            @Min(1) @Max(99) int tokenRefreshPercent
-    ) {}
+            @Min(1) @Max(99) int tokenRefreshPercent,
+            Duration tokenTtl,
+            String master,
+            String appName,
+            String outputBasePath
+    ) {
+        public SparkConfig {
+            if (tokenTtl == null)        tokenTtl       = Duration.ofHours(1);
+            if (master == null)          master         = "local[*]";
+            if (appName == null)         appName        = "SATS";
+            if (outputBasePath == null)  outputBasePath = "/tmp/sats";
+        }
+    }
 
     /**
      * Consumer topology configuration.

@@ -1,11 +1,21 @@
 package com.sats.domain.strategy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sats.config.SatsProperties;
 import com.sats.domain.enums.TargetType;
 import com.sats.domain.model.BatchPayload;
+import com.sats.service.RecordStandardizer;
+import com.sats.writer.SparkSessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -13,6 +23,9 @@ import org.springframework.stereotype.Component;
 public class DeltaWriteStrategy implements WriteStrategy {
 
     private final SatsProperties satsProperties;
+    private final SparkSessionManager sparkSessionManager;
+    private final RecordStandardizer recordStandardizer;
+    private final ObjectMapper objectMapper;
 
     @Override
     public TargetType supports() {
@@ -21,12 +34,45 @@ public class DeltaWriteStrategy implements WriteStrategy {
 
     @Override
     public void write(BatchPayload payload) {
-        log.info(
-                "Writing batch {} ({} records, {} bytes) to Delta target for dataset {}",
+        log.info("Writing batch {} ({} records, {} bytes) to Delta target for dataset {}",
                 payload.batchId(), payload.records().size(),
-                payload.batchSizeBytes(), payload.datasetId()
-        );
-        // TODO: Convert payload.records() to Dataset<Row> via SparkSessionManager,
-        //       then write with format("delta").mode("append").option("mergeSchema", mergeSchema)
+                payload.batchSizeBytes(), payload.datasetId());
+
+        String outputPath = satsProperties.spark().outputBasePath() + "/" + payload.datasetId();
+        boolean mergeSchema = satsProperties.writer().mergeSchema();
+
+        SparkSession spark;
+        try {
+            spark = sparkSessionManager.getSession();
+        } catch (Exception e) {
+            sparkSessionManager.invalidateAndRefresh();
+            spark = sparkSessionManager.getSession();
+        }
+
+        Dataset<Row> df = toDataFrame(spark, payload);
+
+        df.write()
+                .format("delta")
+                .mode("append")
+                .option("mergeSchema", String.valueOf(mergeSchema))
+                .save(outputPath);
+
+        log.info("Delta write complete: dataset={}, path={}, records={}",
+                payload.datasetId(), outputPath, payload.records().size());
+    }
+
+    private Dataset<Row> toDataFrame(SparkSession spark, BatchPayload payload) {
+        List<String> jsonRows = payload.records().stream()
+                .map(record -> {
+                    try {
+                        return objectMapper.writeValueAsString(recordStandardizer.standardize(record));
+                    } catch (Exception e) {
+                        throw new IllegalStateException("JSON serialisation failed for record", e);
+                    }
+                })
+                .collect(Collectors.toList());
+
+        // createDataset avoids JavaRDD and works in both local and cluster modes
+        return spark.read().json(spark.createDataset(jsonRows, Encoders.STRING()));
     }
 }

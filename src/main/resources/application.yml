@@ -40,7 +40,11 @@ sats:
     topic: ${DLQ_TOPIC:sats-dlq}
 
   spark:
-    token-refresh-percent: 80
+    token-refresh-percent: 80           # Rotate session at this % of tokenTtl
+    token-ttl: ${SPARK_TOKEN_TTL:1h}    # Lifetime of the cluster PAT / OAuth token
+    master: ${SPARK_MASTER:local[*]}    # local[*] for dev; spark:// or yarn in prod
+    app-name: sats
+    output-base-path: ${SPARK_OUTPUT_BASE_PATH:/tmp/sats}  # dataset written to {base}/{datasetId}
 
   consumer:
     topic-registry-url: ${TOPIC_REGISTRY_URL:http://localhost:8080/api/topics}
