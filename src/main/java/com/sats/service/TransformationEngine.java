@@ -31,6 +31,7 @@ public class TransformationEngine {
     /**
      * Transforms a single raw message map against the given schema definition.
      *
+     * @param batchLoadId correlation ID for {@code DATA_LOAD} messages; {@code null} otherwise
      * @return The standardised record, or {@code null} if the record should be DLQ'd
      *         (excessive rescue threshold breached).
      */
@@ -39,7 +40,8 @@ public class TransformationEngine {
             SchemaDefinition schema,
             String kafkaTopic,
             int kafkaPartition,
-            long kafkaOffset
+            long kafkaOffset,
+            String batchLoadId
     ) {
         Map<String, Object> aligned = new HashMap<>();
         Map<String, Object> rescueData = new HashMap<>();
@@ -97,6 +99,7 @@ public class TransformationEngine {
                 .kafkaTopic(kafkaTopic)
                 .kafkaPartition(kafkaPartition)
                 .kafkaOffset(kafkaOffset)
+                .batchLoadId(batchLoadId)
                 .ingestionTimestamp(Instant.now())
                 .build();
     }

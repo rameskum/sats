@@ -30,6 +30,10 @@ sats:
   dlq:
     topic: ${DLQ_TOPIC:sats-dlq}
 
+  raw-store:
+    enabled: true
+    flush-interval-ms: 10000   # how often to flush the in-memory buffer to Delta
+
   spark:
     token-refresh-percent: 80           # Rotate session at this % of tokenTtl
     token-ttl: ${SPARK_TOKEN_TTL:1h}    # Lifetime of the cluster PAT / OAuth token
@@ -41,18 +45,36 @@ sats:
     topic-registry-url: ${TOPIC_REGISTRY_URL:http://localhost:8080/api/topics}
     group-id: sats-consumer-group
     # Topic groups control how topics are distributed across listener containers.
-    # Topics in the same group share one poll loop and one set of consumer threads.
-    # Topics in different groups run fully independently — no starvation between groups.
-    # concurrency: number of KafkaConsumer threads per group.
-    #   Effective parallelism = min(concurrency, partition_count).
-    #   Keep concurrency <= partition count to avoid idle consumers.
-    # Topics returned by the registry but absent from all groups → default container (concurrency=1).
+    # Topics in the same group share one poll loop; different groups run independently.
+    #
+    # Each topic descriptor has:
+    #   name        : Kafka topic name (cross-referenced against the broker registry)
+    #   type        : DATA_RECORD | DATA_LOAD | PLAIN_TEXT
+    #   dataset-id  : required for PLAIN_TEXT; ignored for DATA_RECORD / DATA_LOAD
+    #                 (dataset ID is embedded in the Protobuf envelope for those types)
     topic-groups:
-      - topics: [ orders, payments ]   # similar volume — share a poll loop
+      - topics:                              # similar volume — share a poll loop
+          - name: orders
+            type: DATA_RECORD
+          - name: payments
+            type: DATA_RECORD
         concurrency: 2
-      - topics: [ audit-log ]          # low volume — isolated so it is never starved
+
+      - topics:                              # bulk-load topic — carries batchLoadId
+          - name: bulk-import
+            type: DATA_LOAD
         concurrency: 1
-      - topics: [ clickstream ]        # high volume — isolated + scaled out
+
+      - topics:                              # low volume plain-text — dataset defined here
+          - name: audit-log
+            type: PLAIN_TEXT
+            dataset-id: audit-dataset
+        concurrency: 1
+
+      - topics:                              # high volume plain-text — isolated + scaled out
+          - name: clickstream
+            type: PLAIN_TEXT
+            dataset-id: clickstream-dataset
         concurrency: 4
 
 # ─── Spring Kafka defaults ────────────────────────────────

@@ -8,6 +8,7 @@ import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +50,7 @@ import java.util.stream.Collectors;
 public class TopicSubscriptionManager implements SmartLifecycle {
 
     private final TopicProvider topicProvider;
+    private final TopicRegistry topicRegistry;
     private final SatsKafkaListener kafkaListener;
     private final ConsumerFactory<String, byte[]> consumerFactory;
     private final SatsProperties satsProperties;
@@ -61,11 +63,13 @@ public class TopicSubscriptionManager implements SmartLifecycle {
 
     public TopicSubscriptionManager(
             TopicProvider topicProvider,
+            TopicRegistry topicRegistry,
             SatsKafkaListener kafkaListener,
             ConsumerFactory<String, byte[]> consumerFactory,
             SatsProperties satsProperties
     ) {
         this.topicProvider = topicProvider;
+        this.topicRegistry = topicRegistry;
         this.kafkaListener = kafkaListener;
         this.consumerFactory = consumerFactory;
         this.satsProperties = satsProperties;
@@ -76,38 +80,47 @@ public class TopicSubscriptionManager implements SmartLifecycle {
     @Override
     public void start() {
         var consumerConfig = satsProperties.consumer();
-        String[] allTopics = topicProvider.getTopics();
-        Set<String> registryTopics = new HashSet<>(Arrays.asList(allTopics));
+        Set<String> registryTopics = new HashSet<>(Arrays.asList(topicProvider.getTopics()));
         Set<String> assignedTopics = new HashSet<>();
 
-        var groups = consumerConfig.topicGroups();
+        // Collect all active descriptors to register with TopicRegistry
+        List<SatsProperties.ConsumerConfig.TopicDescriptor> activeDescriptors = new ArrayList<>();
 
+        var groups = consumerConfig.topicGroups();
         if (groups != null && !groups.isEmpty()) {
             for (var group : groups) {
-                // Only subscribe to topics that the registry actually returned
-                List<String> matched = group.topics().stream()
-                        .filter(registryTopics::contains)
-                        .collect(Collectors.toList());
+                // Only subscribe to topics that the broker registry actually returned
+                var matched = group.topics().stream()
+                        .filter(d -> registryTopics.contains(d.name()))
+                        .toList();
 
                 if (matched.isEmpty()) {
-                    log.warn("Topic group {} has no matches in registry — skipping", group.topics());
+                    log.warn("Topic group has no matches in broker registry — skipping: {}",
+                            group.topics().stream().map(d -> d.name()).collect(Collectors.joining(", ")));
                     continue;
                 }
 
-                String label = String.join("+", matched);
-                startContainer(label, matched.toArray(String[]::new), group.concurrency());
-                assignedTopics.addAll(matched);
+                String label = matched.stream().map(d -> d.name()).collect(Collectors.joining("+"));
+                String[] topicNames = matched.stream().map(d -> d.name()).toArray(String[]::new);
+                startContainer(label, topicNames, group.concurrency());
+
+                activeDescriptors.addAll(matched);
+                matched.forEach(d -> assignedTopics.add(d.name()));
             }
         }
 
-        // Topics from registry not claimed by any group → implicit default container
+        // Topics from broker registry not claimed by any group → default container (PLAIN_TEXT, topic=datasetId)
         Set<String> ungrouped = new HashSet<>(registryTopics);
         ungrouped.removeAll(assignedTopics);
         if (!ungrouped.isEmpty()) {
-            log.info("Ungrouped topics → default container (concurrency=1): {}", ungrouped);
+            log.info("Ungrouped topics → default container (concurrency=1, type=PLAIN_TEXT): {}", ungrouped);
             startContainer("__default__", ungrouped.toArray(String[]::new), 1);
+            ungrouped.forEach(name -> activeDescriptors.add(
+                    new SatsProperties.ConsumerConfig.TopicDescriptor(
+                            name, com.sats.domain.enums.MessageType.PLAIN_TEXT, name)));
         }
 
+        topicRegistry.register(activeDescriptors);
         running = true;
     }
 

@@ -8,6 +8,8 @@ import java.util.Map;
 /**
  * The output envelope emitted by the TransformationEngine (Section 5).
  * Carries the validated payload alongside rescue, extra, and Kafka metadata.
+ * {@code batchLoadId} is non-null only for {@code DATA_LOAD} messages and
+ * correlates all records belonging to the same bulk-load operation.
  */
 @Builder
 public record TransformedRecord(
@@ -17,5 +19,6 @@ public record TransformedRecord(
         String kafkaTopic,
         int kafkaPartition,
         long kafkaOffset,
+        String batchLoadId,       // null for DATA_RECORD and PLAIN_TEXT
         Instant ingestionTimestamp
 ) {}

@@ -1,9 +1,11 @@
 package com.sats.config;
 
+import com.sats.domain.enums.MessageType;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -68,19 +70,36 @@ public record SatsProperties(
             String groupId,
             List<TopicGroup> topicGroups
     ) {
+
+        /**
+         * Describes a single Kafka topic — its name, message type, and (for
+         * {@code PLAIN_TEXT}) the dataset ID that provides schema + write-format.
+         *
+         * <ul>
+         *   <li>{@code DATA_RECORD} / {@code DATA_LOAD} — dataset ID is embedded
+         *       inside the Protobuf envelope; {@code datasetId} is ignored.</li>
+         *   <li>{@code PLAIN_TEXT} — {@code datasetId} must be set; it is used to
+         *       look up the target schema and write format.</li>
+         * </ul>
+         */
+        public record TopicDescriptor(
+                @NotBlank String name,
+                @NotNull  MessageType type,
+                String datasetId          // required for PLAIN_TEXT; null otherwise
+        ) {}
+
         /**
          * A named set of topics that share one {@code ConcurrentMessageListenerContainer}.
          *
          * <ul>
-         *   <li>{@code topics} — subset of topics (from the REST registry) to assign to
-         *       this group.  Topics not listed in any group fall into an implicit default
-         *       container with {@code concurrency = 1}.</li>
+         *   <li>{@code topics} — descriptors whose {@code name} is cross-referenced
+         *       against the REST topic registry; unmatched descriptors are skipped.</li>
          *   <li>{@code concurrency} — number of {@code KafkaConsumer} threads.
          *       Effective parallelism = min(concurrency, partition count).</li>
          * </ul>
          */
         public record TopicGroup(
-                @NotEmpty List<String> topics,
+                @NotEmpty List<TopicDescriptor> topics,
                 int concurrency
         ) {
             public TopicGroup {

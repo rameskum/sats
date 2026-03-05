@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option java_package = "com.sats.proto";
+option java_outer_classname = "EnvelopeProto";
+option java_multiple_files = true;
+
+// ─── Shared compression codec ─────────────────────────────────────────────────
+
+enum Compression {
+  NONE   = 0;
+  GZIP   = 1;
+  SNAPPY = 2;
+}
+
+// ─── DATA_RECORD ──────────────────────────────────────────────────────────────
+// A single data record published from a source system.
+// The dataset_id drives schema resolution and target-format selection.
+// The payload bytes hold the raw message (JSON, Avro, CSV, …) that the
+// TransformationEngine will validate and align to the target schema.
+
+message DataRecordEnvelope {
+  string      dataset_id  = 1;   // Resolves schema + write format
+  bytes       payload     = 2;   // Raw inner message (possibly compressed)
+  Compression compression = 3;   // Compression applied to payload
+}
+
+// ─── DATA_LOAD ────────────────────────────────────────────────────────────────
+// A record that is part of a named bulk-load operation.
+// All records sharing the same batch_load_id belong to one logical load;
+// downstream systems can use this to detect partial/complete ingestion.
+
+message DataLoadEnvelope {
+  string      dataset_id    = 1;
+  string      batch_load_id = 2;   // Correlation ID for the bulk load
+  bytes       payload       = 3;
+  Compression compression   = 4;
+}
