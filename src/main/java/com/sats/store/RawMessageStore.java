@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RawMessageStore {
 
-    static final String RAW_TABLE = "__raw_messages__";
+    public static final String RAW_TABLE = "__raw_messages__";
 
     private final SparkSessionManager sparkSessionManager;
     private final SatsProperties satsProperties;

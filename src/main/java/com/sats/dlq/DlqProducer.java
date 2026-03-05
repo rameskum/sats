@@ -28,24 +28,32 @@ public class DlqProducer {
     private final SatsProperties satsProperties;
     private final ObjectMapper objectMapper;
 
+    /** Sends a single failed record to the DLQ using the original {@link ConsumerRecord}. */
     public void send(ConsumerRecord<String, byte[]> original, DlqReason reason, String errorMessage) {
-        var dlqRecord = new ProducerRecord<>(
-                satsProperties.dlq().topic(),
-                original.key(),
-                original.value()
-        );
+        send(original.topic(), original.partition(), original.offset(),
+                original.key(), original.value(), reason, errorMessage);
+    }
+
+    /**
+     * Sends a single failed record to the DLQ using individual fields.
+     * Used by {@link com.sats.consumer.RecordProcessor} so the same DLQ path
+     * works for both live Kafka messages and replayed records (which have no
+     * {@link ConsumerRecord}).
+     */
+    public void send(String sourceTopic, int partition, long offset,
+                     String key, byte[] value, DlqReason reason, String errorMessage) {
+        var dlqRecord = new ProducerRecord<>(satsProperties.dlq().topic(), key, value);
 
         addHeader(dlqRecord, "reason", reason.name());
-        addHeader(dlqRecord, "source_topic", original.topic());
-        addHeader(dlqRecord, "source_partition", String.valueOf(original.partition()));
-        addHeader(dlqRecord, "source_offset", String.valueOf(original.offset()));
+        addHeader(dlqRecord, "source_topic", sourceTopic);
+        addHeader(dlqRecord, "source_partition", String.valueOf(partition));
+        addHeader(dlqRecord, "source_offset", String.valueOf(offset));
         addHeader(dlqRecord, "error_message", truncate(errorMessage, 1024));
         addHeader(dlqRecord, "timestamp", Instant.now().toString());
 
         kafkaTemplate.send(dlqRecord);
         log.warn("Published to DLQ [{}]: topic={}, partition={}, offset={}, reason={}",
-                satsProperties.dlq().topic(),
-                original.topic(), original.partition(), original.offset(), reason);
+                satsProperties.dlq().topic(), sourceTopic, partition, offset, reason);
     }
 
     /**

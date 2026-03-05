@@ -44,6 +44,12 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Web (for ReplayController and Actuator HTTP endpoints) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
         <!-- Kafka -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
